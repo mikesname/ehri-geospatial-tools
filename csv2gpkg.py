@@ -4,6 +4,7 @@ import os
 import geopandas
 import streamlit as st
 from shapely.geometry import Point
+import slugify
 
 import csv
 
@@ -22,7 +23,7 @@ types = dict(
 uploaded_file = st.file_uploader("Choose a CSV file", accept_multiple_files=False)
 
 if uploaded_file:
-    name = os.path.splitext(uploaded_file.name)[0]
+    name = slugify.slugify(os.path.splitext(uploaded_file.name)[0], separator="_")
     st.write("filename:", name)
 
     stringio = StringIO(uploaded_file.getvalue().decode("utf-8"))
@@ -50,33 +51,39 @@ if uploaded_file:
 
     st.write("Types: ", init_types)
 
-    lat_col = [h for h, t in init_types.items() if t == "LATITUDE"][0]
-    lon_col = [h for h, t in init_types.items() if t == "LONGITUDE"][0]
+    lat_cols = [h for h, t in init_types.items() if t == "LATITUDE"]
+    lon_cols = [h for h, t in init_types.items() if t == "LONGITUDE"]
 
-    st.write(f"Lat col: {lat_col}, Lon col: {lon_col}")
+    if not (lat_cols and lon_cols):
+        st.error("No latitude and/or longitude column found")
+    else:
+        lat_col = lat_cols[0]
+        lon_col = lon_cols[0]
+        st.write(f"Lat col: **{lat_col}**, Lon col: **{lon_col}**")
 
-    if st.button("Generate GeoPackage?"):
-        data = {"geometry": []}
-        for header in headers:
-            if not header in [lat_col, lon_col]:
-                data[header] = []
+        if st.button("Generate GeoPackage?"):
+            data = {"geometry": []}
+            for header in headers:
+                if not header in [lat_col, lon_col]:
+                    data[header] = []
 
-        for row in reader:
-            data["geometry"].append(Point(float(row[lon_col]), float(row[lat_col])))
-            for col, value in row.items():
-                if not col in [lat_col, lon_col]:
-                    coltype = init_types[col]
-                    if coltype == "TEXT":
-                        data[col].append(value)
-                    elif coltype == "INT":
-                        data[col].append(int(value))
-                    else:
-                        data[col].append(float(value))
+            for row in reader:
+                if row[lon_col] and row[lat_col]:
+                    data["geometry"].append(Point(float(row[lon_col]), float(row[lat_col])))
+                    for col, value in row.items():
+                        if not col in [lat_col, lon_col]:
+                            coltype = init_types[col]
+                            if coltype == "TEXT":
+                                data[col].append(value)
+                            elif coltype == "INT":
+                                data[col].append(int(value))
+                            else:
+                                data[col].append(float(value))
 
-        gdf = geopandas.GeoDataFrame(data, crs="EPSG:4326")
-        st.write(gdf)
+            gdf = geopandas.GeoDataFrame(data, crs="EPSG:4326")
+            st.write(gdf)
 
-        outname = f"{name}.gpkg"
-        gdf.to_file(outname, layer=name, driver="GPKG")
-        with open(outname, "rb") as f:
-            st.download_button(f"Download File: '{outname}'", f, file_name=outname, mime="application/x-sqlite3")
+            outname = f"{name}.gpkg"
+            gdf.to_file(outname, layer=name, driver="GPKG")
+            with open(outname, "rb") as f:
+                st.download_button(f"Download File: '{outname}'", f, file_name=outname, mime="application/x-sqlite3")
