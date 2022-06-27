@@ -82,9 +82,10 @@ def fix_store_data(session, base_url, name, workspace):
         )
     )
     fix_url = f"{base_url}/datastores/{name}"
-    fix_resp = session.put(fix_url, data=json.dumps(fix_payload), headers={"content-type": "application/json"})
+    fix_resp = session.put(fix_url, data=json.dumps(fix_payload), headers={"accept": "application/json", "content-type": "application/json"})
     if fix_resp.status_code not in [HTTPStatus.OK]:
         st.error(f"Unexpected status code from ingest fix: {fix_resp.status_code}")
+        st.write(fix_resp)
         st.write(fix_resp.text)
         st.stop()
 
