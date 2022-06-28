@@ -62,7 +62,7 @@ uploaded_file = st.file_uploader("Choose a CSV file", type=["csv", "tsv"], accep
 if not uploaded_file:
     st.stop()
 
-name = slugify.slugify(os.path.splitext(uploaded_file.name)[0], separator="_")
+name = slugify.slugify(os.path.splitext(uploaded_file.name)[0], separator="_", lowercase=False)
 st.write(f"Filename: `{name}`")
 
 # Try and understand the CSV
