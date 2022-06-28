@@ -10,6 +10,7 @@ import geopandas.io.file
 import requests
 import slugify
 import streamlit as st
+from geopandas import GeoDataFrame
 
 LayerInfo = namedtuple("LayerInfo", ["table_name", "data_type", "identifier", "description"])
 
@@ -144,9 +145,17 @@ def get_wms_url(gdf, proto, host, workspace, name):
     return f"{proto}://{host}/geoserver/wms?{urllib.parse.urlencode(params)}"
 
 
-@st.cache(show_spinner=False, allow_output_mutation=True)
+@st.cache(show_spinner=False)
 def load_dataframe(path: str, *_):
     return geopandas.read_file(path)
+
+
+@st.cache(show_spinner=False)
+def clone_with_lat_lon(gdf: GeoDataFrame) -> GeoDataFrame:
+    df = gdf.copy(deep=True)
+    df['lon'] = df.geometry.x
+    df['lat'] = df.geometry.y
+    return df
 
 
 def check_point_geom(gdf) -> bool:
@@ -194,18 +203,14 @@ def main():
             if show == 'Table':
                 st.write(gdf)
             else:
-                df = gdf.copy()
-                df['Center_point'] = df['geometry'].centroid
-                df['lon'] = df['geometry'].x
-                df['lat'] = df['geometry'].y
-                st.map(df)
+                st.map(clone_with_lat_lon(gdf))
         else:
             st.write(gdf)
             st.warning("Map preview only available with Point geometry")
 
         st.write("---")
 
-    if st.button(f"Ingest GeoPackage '{filename}'"):
+    if st.button(f"Import GeoPackage '{filename}'"):
         session = requests.Session()
         session.auth = (os.environ["GEOSERVER_USER"], os.environ["GEOSERVER_PASS"])
         session.headers.update({"accept": "application/json", "content-type": "application/json"})
