@@ -10,8 +10,6 @@ import geopandas.io.file
 import requests
 import slugify
 import streamlit as st
-import streamlit.components.v1 as components
-
 
 LayerInfo = namedtuple("LayerInfo", ["table_name", "data_type", "identifier", "description"])
 
@@ -140,14 +138,20 @@ def get_wms_url(gdf, proto, host, workspace, name):
         service="wms",
         width=width,
         height=height,
-        format="image/jpeg"
+        format="image/jpeg",
+        srs=gdf.crs.srs
     )
     return f"{proto}://{host}/geoserver/wms?{urllib.parse.urlencode(params)}"
 
 
 @st.cache(show_spinner=False, allow_output_mutation=True)
-def load_dataframe(path):
+def load_dataframe(path: str, *_):
     return geopandas.read_file(path)
+
+
+def check_point_geom(gdf) -> bool:
+    import numpy as np
+    return np.array_equal(np.array(['Point']), gdf.geom_type.unique())
 
 
 def main():
@@ -167,7 +171,7 @@ def main():
         st.stop()
 
     # Write the file so we can get metadata from it without depending on Fiona...
-    name = slugify.slugify(os.path.splitext(uploaded_file.name)[0], separator="_")
+    name = slugify.slugify(os.path.splitext(uploaded_file.name)[0], separator="_", lowercase=False)
     filename = f"{name}.gpkg"
     st.write(f"Filename: `{filename}`")
 
@@ -182,10 +186,11 @@ def main():
 
     st.info(f"Layers found: {len(layers)}")
 
-    show = st.radio("Preview data:", ('Table', 'Map'))
     with st.spinner("Loading data..."):
-        gdf = load_dataframe(filename)
-        with st.container():
+        gdf = load_dataframe(filename, uploaded_file.id)
+        is_points = check_point_geom(gdf)
+        if is_points:
+            show = st.radio("Preview data:", ('Table', 'Map'))
             if show == 'Table':
                 st.write(gdf)
             else:
@@ -194,8 +199,11 @@ def main():
                 df['lon'] = df['geometry'].x
                 df['lat'] = df['geometry'].y
                 st.map(df)
+        else:
+            st.write(gdf)
+            st.warning("Map preview only available with Point geometry")
 
-            st.write("---")
+        st.write("---")
 
     if st.button(f"Ingest GeoPackage '{filename}'"):
         session = requests.Session()
@@ -227,13 +235,14 @@ def main():
             progress.progress(int(inc_progress * num_ops))
 
         st.balloons()
-        st.success("Done! ")
+        st.success("Done!")
 
-        for layer_info in layers:
-            wms_url = get_wms_url(gdf, proto, host, workspace, layer_info.identifier)
-            with st.container():
-                st.write(f"WMS Layer preview: {layer_info.identifier}")
-                components.iframe(wms_url, width=1024)
+        with st.spinner("Loading layer preview..."):
+            for layer_info in layers:
+                wms_url = get_wms_url(gdf, proto, host, workspace, layer_info.identifier)
+                with st.container():
+                    st.markdown(f"WMS layer preview: '{layer_info.identifier}' ([link]({wms_url}))")
+                    st.image(wms_url)
 
 
 if __name__ == "__main__":
