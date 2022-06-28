@@ -10,6 +10,7 @@ import requests
 import slugify
 import streamlit as st
 
+
 LayerInfo = namedtuple("LayerInfo", ["table_name", "data_type", "identifier", "description"])
 
 
@@ -104,8 +105,7 @@ def fix_store_data(session: requests.Session, base_url: str, name: str, workspac
         st.error("Unable to find database connection parameter with expected suffix")
         st.stop()
 
-    fix_resp = session.put(url, data=json.dumps(data),
-                           headers={"accept": "application/json", "content-type": "application/json"})
+    fix_resp = session.put(url, data=json.dumps(data))
     if fix_resp.status_code not in [HTTPStatus.OK]:
         st.error(f"Unexpected status code from ingest fix: {fix_resp.status_code}")
         st.write(fix_resp)
@@ -124,6 +124,11 @@ def ingest_store(session: requests.Session, base_url: str, name: str, uploaded_f
         st.stop()
 
 
+@st.cache(show_spinner=False, allow_output_mutation=True)
+def load_dataframe(path):
+    return geopandas.read_file(path)
+
+
 def main():
     st.write("""# Geoserver GeoPackage importer""")
 
@@ -136,8 +141,7 @@ def main():
         after ingest to avoid a crash when managing the workspace in the Geoserver UI.
         """)
 
-    uploaded_file = st.file_uploader("Choose a GPKG file", type=["gpkg"], accept_multiple_files=False)
-
+    uploaded_file = st.file_uploader("Choose a GeoPackage file", type=["gpkg"], accept_multiple_files=False)
     if not uploaded_file:
         st.stop()
 
@@ -157,28 +161,33 @@ def main():
 
     st.info(f"Layers found: {len(layers)}")
 
-    @st.cache(show_spinner=False)
-    def load_dataframe(path):
-        return geopandas.read_file(path)
-
+    show = st.radio("Preview data:", ('Table', 'Map'))
     with st.spinner("Loading data..."):
         gdf = load_dataframe(filename)
         with st.container():
-            st.write(gdf)
+            if show == 'Table':
+                st.write(gdf)
+            else:
+                df = gdf.copy()
+                df['Center_point'] = df['geometry'].centroid
+                df['lon'] = df['geometry'].x
+                df['lat'] = df['geometry'].y
+                st.map(df)
 
+            st.write("---")
 
-    session = requests.Session()
-    session.auth = (os.environ["GEOSERVER_USER"], os.environ["GEOSERVER_PASS"])
-    session.headers.update({"accept": "application/json", "content-type": "application/json"})
+    if st.button(f"Ingest GeoPackage '{filename}'"):
+        session = requests.Session()
+        session.auth = (os.environ["GEOSERVER_USER"], os.environ["GEOSERVER_PASS"])
+        session.headers.update({"accept": "application/json", "content-type": "application/json"})
 
-    host = os.environ["GEOSERVER_HOST"]
-    proto = "https" if os.environ.get("GEOSERVER_SECURE", 0) else "http"
-    workspace = os.environ.get("GEOSERVER_WORKSPACE")
-    base_url = f"{proto}://{host}/geoserver/rest/workspaces/{workspace}"
+        host = os.environ["GEOSERVER_HOST"]
+        proto = "https" if os.environ.get("GEOSERVER_SECURE", 0) else "http"
+        workspace = os.environ.get("GEOSERVER_WORKSPACE")
+        base_url = f"{proto}://{host}/geoserver/rest/workspaces/{workspace}"
 
-    st.info(f"Workspace: `{workspace}`; Base URL: `{base_url}`")
+        st.info(f"Workspace: `{workspace}`; Base URL: `{base_url}`")
 
-    if st.button("Ingest GeoPackage?"):
         progress = st.progress(0)
         num_ops = 0
         inc_progress = 100 / (2 + len(layers))
@@ -195,6 +204,10 @@ def main():
             create_or_update_layer(session, base_url, workspace, name, layer_info)
             num_ops += 1
             progress.progress(int(inc_progress * num_ops))
+
+        bbox = ','.join([str(p) for p in gdf.total_bounds])
+        wms_url = f"{proto}://{host}/geoserver/wms?request=GetMap&layers={workspace}:{name}&bbox={bbox}&version=1.1.1&service=wms&width=1000&format=image/png"
+        st.image(wms_url)
 
         st.balloons()
         st.success("Done!")
