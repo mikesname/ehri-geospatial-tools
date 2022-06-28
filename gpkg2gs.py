@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+import urllib.parse
 from collections import namedtuple
 from http import HTTPStatus
 from typing import List
@@ -9,6 +10,7 @@ import geopandas.io.file
 import requests
 import slugify
 import streamlit as st
+import streamlit.components.v1 as components
 
 
 LayerInfo = namedtuple("LayerInfo", ["table_name", "data_type", "identifier", "description"])
@@ -124,6 +126,25 @@ def ingest_store(session: requests.Session, base_url: str, name: str, uploaded_f
         st.stop()
 
 
+def get_wms_url(gdf, proto, host, workspace, name):
+    bounds = gdf.total_bounds
+    ratio = float(bounds[3] - bounds[1]) / float(bounds[2] - bounds[0])
+    width = 1024
+    height = int(float(width) * ratio)
+    bbox = ','.join([str(p) for p in bounds])
+    params = dict(
+        request="GetMap",
+        layers=f"{workspace}:{name}",
+        bbox=bbox,
+        version="1.1.1",
+        service="wms",
+        width=width,
+        height=height,
+        format="image/jpeg"
+    )
+    return f"{proto}://{host}/geoserver/wms?{urllib.parse.urlencode(params)}"
+
+
 @st.cache(show_spinner=False, allow_output_mutation=True)
 def load_dataframe(path):
     return geopandas.read_file(path)
@@ -205,12 +226,14 @@ def main():
             num_ops += 1
             progress.progress(int(inc_progress * num_ops))
 
-        bbox = ','.join([str(p) for p in gdf.total_bounds])
-        wms_url = f"{proto}://{host}/geoserver/wms?request=GetMap&layers={workspace}:{name}&bbox={bbox}&version=1.1.1&service=wms&width=1000&height=1000&format=image/png"
-        st.image(wms_url)
-
         st.balloons()
-        st.success("Done!")
+        st.success("Done! ")
+
+        for layer_info in layers:
+            wms_url = get_wms_url(gdf, proto, host, workspace, layer_info.identifier)
+            with st.container():
+                st.write(f"WMS Layer preview: {layer_info.identifier}")
+                components.iframe(wms_url, width=1024)
 
 
 if __name__ == "__main__":
