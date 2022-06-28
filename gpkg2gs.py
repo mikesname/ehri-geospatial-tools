@@ -206,7 +206,7 @@ def main():
             progress.progress(int(inc_progress * num_ops))
 
         bbox = ','.join([str(p) for p in gdf.total_bounds])
-        wms_url = f"{proto}://{host}/geoserver/wms?request=GetMap&layers={workspace}:{name}&bbox={bbox}&version=1.1.1&service=wms&width=1000&format=image/png"
+        wms_url = f"{proto}://{host}/geoserver/wms?request=GetMap&layers={workspace}:{name}&bbox={bbox}&version=1.1.1&service=wms&width=1000&height=1000&format=image/png"
         st.image(wms_url)
 
         st.balloons()
