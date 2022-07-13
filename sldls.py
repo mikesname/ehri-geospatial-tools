@@ -175,7 +175,11 @@ def main():
                     st.write("---")
                     with st.container():
                         st.image(wms_url)
-                        st.caption(f"WMS layer '{layer_name}' preview with style '{style_name}': ([link]({wms_url}))")
+                        if style_name != "":
+                            st.caption(f"WMS layer '{layer_name}' preview with style '{style_name}': ([link]({wms_url}))")
+                        else:
+                            st.caption(f"WMS layer '{layer_name}' preview with default style: ([link]({wms_url}))")
+
 
 
 if __name__ == "__main__":
