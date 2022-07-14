@@ -2,7 +2,7 @@ import json
 import os
 import urllib.parse
 from http import HTTPStatus
-from typing import NamedTuple, List, Generator, Tuple
+from typing import NamedTuple, List, Generator, Tuple, Union
 
 import requests
 import streamlit as st
@@ -99,6 +99,12 @@ class Geoserver:
         check_code(r)
         return [Style(style["name"], style["href"]) for style in r.json()["styles"]["style"]]
 
+    def get_layer_default_style(self, layer: Layer) -> Union[Style, None]:
+        r = self.session.get(layer.href)
+        check_code(r)
+        style_info = r.json()["layer"].get("defaultStyle")
+        return Style(**style_info) if style_info else None
+
     def list_layers(self) -> List[Layer]:
         r = self.session.get(f"{self.base_url}/workspaces/{self.workspace}/layers")
         check_code(r)
@@ -144,10 +150,19 @@ def main():
         st.markdown("### Select a layer:")
         layer_name = st.selectbox("Layer", [""] + [layer.name for layer in layers])
 
+        # This box has to update when we reload the data
+        style_info = st.empty()
+
+        def show_style_info(layer: Layer):
+            default_style = gs.get_layer_default_style(layer)
+            if default_style:
+                style_info.info(f"Layer '{layer_name}' default style: **{default_style.name}**")
+            else:
+                style_info.warning(f"Layer '{layer_name}' has no default style")
+
         if layer_name != "":
-            st.write(f"Setting title for layer {layer_name}")
             layer = next(layer for layer in layers if layer.name == layer_name)
-            info = gs.get_layer_info(layer)
+            show_style_info(layer)
 
             st.markdown("### Select a style:")
             style_list = [style.name for style in styles]
@@ -167,15 +182,19 @@ def main():
                 if st.button("Assign Default Style", help="Set selected style as layer default"):
                     gs.set_default_style(layer, style)
                     st.success("Done!")
+                    show_style_info(layer)
 
             with col2:
                 st.markdown("### Layer preview:")
                 with st.spinner("Loading GeoServer layer preview..."):
-                    wms_url = gs.get_layer_image(info, style_name)
+                    wms_url = gs.get_layer_image(gs.get_layer_info(layer), style_name)
                     st.write("---")
                     with st.container():
                         st.image(wms_url)
-                        st.caption(f"WMS layer '{layer_name}' preview with style '{style_name}': ([link]({wms_url}))")
+                        if style_name:
+                            st.caption(f"WMS layer '{layer_name}' preview with style '{style_name}': ([link]({wms_url}))")
+                        else:
+                            st.caption(f"WMS layer '{layer_name}' preview with default style: ([link]({wms_url}))")
 
 
 if __name__ == "__main__":
