@@ -1,14 +1,10 @@
-import json
 import os
-import urllib.parse
-from http import HTTPStatus
-from typing import NamedTuple, List, Generator, Tuple, Union
+from typing import NamedTuple, Generator
 
-import requests
 import streamlit as st
-from owslib.wms import WebMapService
 from rdflib import Graph, SKOS, RDF, URIRef
-from requests import Response
+
+from geoserver import GeoServer, Layer, GeoServerError
 
 VOCAB = "https://raw.githubusercontent.com/michalfrankl/ehri-holocaust-geographies/main/ehri_holocaust_geographies.rdf"
 
@@ -22,24 +18,6 @@ class Term(NamedTuple):
         return os.path.basename(str(self.uri))
 
 
-class Resource(NamedTuple):
-    name: str
-    href: str
-
-
-class Style(Resource):
-    pass
-
-
-class Layer(Resource):
-    pass
-
-
-class LayerInfo(NamedTuple):
-    name: str
-    bounds: Tuple[float, float, float, float]
-    srs: str
-
 class Vocabulary:
     def __init__(self):
         self.g = Graph()
@@ -51,116 +29,53 @@ class Vocabulary:
                 yield Term(s, str(literal))
 
 
-def check_code(r: Response):
-    if r.status_code not in [HTTPStatus.OK, HTTPStatus.CREATED]:
-        st.error(f"Unexpected status from Geoserver: {r.status_code}")
-        st.error(r.text)
-        st.stop()
-
-
-def get_wms_url(proto: str, host: str, workspace: str, layer_info: LayerInfo, styles=None):
-    bounds = layer_info.bounds
-    ratio = float(bounds[3] - bounds[1]) / float(bounds[2] - bounds[0])
-    width = 512
-    height = int(float(width) * ratio)
-    bbox = ','.join([str(p) for p in bounds])
-    params = dict(
-        request="GetMap",
-        layers=f"{workspace}:{layer_info.name}",
-        bbox=bbox,
-        version="1.1.1",
-        service="wms",
-        width=width,
-        height=height,
-        format="image/jpeg",
-        styles=styles,
-        srs=layer_info.srs
-    )
-    return f"{proto}://{host}/geoserver/wms?{urllib.parse.urlencode(params)}"
-
-
-class Geoserver:
-    def __init__(self):
-        self.session = requests.Session()
-        user_ = os.environ["GEOSERVER_USER"]
-        pass_ = os.environ["GEOSERVER_PASS"]
-        self.session.auth = (user_, pass_)
-        self.session.headers.update({"accept": "application/json", "content-type": "application/json"})
-
-        self.host = os.environ["GEOSERVER_HOST"]
-        self.proto = "https" if os.environ.get("GEOSERVER_SECURE", 0) else "http"
-        self.workspace = os.environ.get("GEOSERVER_WORKSPACE")
-        self.base_url = f"{self.proto}://{self.host}/geoserver/rest"
-
-        self.wms = WebMapService(f"{self.proto}://{self.host}/geoserver/wms", username=user_, password=pass_)
-
-    def list_styles(self) -> List[Style]:
-        r = self.session.get(f"{self.base_url}/styles")
-        check_code(r)
-        return [Style(style["name"], style["href"]) for style in r.json()["styles"]["style"]]
-
-    def get_layer_default_style(self, layer: Layer) -> Union[Style, None]:
-        r = self.session.get(layer.href)
-        check_code(r)
-        style_info = r.json()["layer"].get("defaultStyle")
-        return Style(**style_info) if style_info else None
-
-    def list_layers(self) -> List[Layer]:
-        r = self.session.get(f"{self.base_url}/workspaces/{self.workspace}/layers")
-        check_code(r)
-        return [Layer(layer["name"], layer["href"]) for layer in r.json()["layers"]["layer"]]
-
-    def set_default_style(self, layer: Layer, style: Style) -> None:
-        r = self.session.get(layer.href)
-        check_code(r)
-        data = r.json()
-        data["layer"]["defaultStyle"] = style._asdict()
-        rp = self.session.put(layer.href, json.dumps(data))
-        check_code(rp)
-
-    def get_layer_info(self, layer) -> LayerInfo:
-        info = self.wms[f"{self.workspace}:{layer.name}"]
-        return LayerInfo(layer.name, info.boundingBox[0:4], info.boundingBox[4])
-
-    def get_layer_image(self, layer_info: LayerInfo, styles=None):
-        return get_wms_url(self.proto, self.host, self.workspace, layer_info, styles)
-
-
 def main():
 
     st.set_page_config(layout="wide")
-    st.title("Geoserver Styles")
+    st.title("GeoServer Styles")
     col1, col2 = st.columns(2)
     sidebar = st.sidebar
 
     vocab = Vocabulary()
-    gs = Geoserver()
 
-    with st.spinner("Loading data"):
-        terms = sorted(list(vocab.get_terms()), key=lambda t: t.label)
-        layers = gs.list_layers()
-        styles = gs.list_styles()
+    gs = GeoServer(
+        os.environ["GEOSERVER_HOST"],
+        os.environ["GEOSERVER_USER"],
+        os.environ["GEOSERVER_PASS"],
+        bool(int(os.environ.get("GEOSERVER_SECURE", 0))),
+        os.environ["GEOSERVER_WORKSPACE"],
+        info = st.info,
+        error = st.error
+    )
 
-    with sidebar:
-        st.write("### Vocabulary terms:")
-        for term in terms:
-            st.write(f"{term.label} `{term.tag}`")
+    try:
+        with st.spinner("Loading data"):
+            terms = sorted(list(vocab.get_terms()), key=lambda t: t.label)
+            layers = gs.list_layers()
+            styles = gs.list_styles()
 
-    with col1:
-        st.markdown("### Select a layer:")
-        layer_name = st.selectbox("Layer", [""] + [layer.name for layer in layers])
+        with sidebar:
+            st.write("### Vocabulary terms:")
+            for term in terms:
+                st.write(f"{term.label} `{term.tag}`")
 
-        # This box has to update when we reload the data
-        style_info = st.empty()
+        with col1:
+            st.markdown("### Select a layer:")
+            layer_name = st.selectbox("Layer", [""] + [layer.name for layer in layers])
 
-        def show_style_info(layer: Layer):
-            default_style = gs.get_layer_default_style(layer)
-            if default_style:
-                style_info.info(f"Layer '{layer_name}' default style: **{default_style.name}**")
-            else:
-                style_info.warning(f"Layer '{layer_name}' has no default style")
+            # This box has to update when we reload the data
+            style_info = st.empty()
 
-        if layer_name != "":
+            def show_style_info(layer: Layer):
+                default_style = gs.get_layer_default_style(layer)
+                if default_style:
+                    style_info.info(f"Layer '{layer_name}' default style: **{default_style.name}**")
+                else:
+                    style_info.warning(f"Layer '{layer_name}' has no default style")
+
+            if layer_name == "":
+                st.stop()
+
             layer = next(layer for layer in layers if layer.name == layer_name)
             show_style_info(layer)
 
@@ -195,6 +110,11 @@ def main():
                             st.caption(f"WMS layer '{layer_name}' preview with style '{style_name}': ([link]({wms_url}))")
                         else:
                             st.caption(f"WMS layer '{layer_name}' preview with default style: ([link]({wms_url}))")
+
+    except GeoServerError as e:
+        st.error(e.message)
+        st.error(e.response_text)
+        st.stop()
 
 
 if __name__ == "__main__":
