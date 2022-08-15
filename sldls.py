@@ -95,7 +95,7 @@ def main():
                 style = next(style for style in styles if style.name == style_name)
 
                 if st.button("Assign Default Style", help="Set selected style as layer default"):
-                    gs.set_default_style(layer, style)
+                    gs.set_default_style(layer.name, style)
                     st.success("Done!")
                     show_style_info(layer)
 

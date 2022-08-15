@@ -109,12 +109,13 @@ class GeoServer:
         check_code(r)
         return [Layer(layer["name"], layer["href"]) for layer in r.json()["layers"]["layer"]]
 
-    def set_default_style(self, layer: Layer, style: Style) -> None:
-        r = self.session.get(layer.href)
+    def set_default_style(self, layer_name: str, style: Style) -> None:
+        layer_url = f"{self.base_url}/workspaces/{self.workspace}/layers/{layer_name}"
+        r = self.session.get(layer_url)
         check_code(r)
         data = r.json()
         data["layer"]["defaultStyle"] = style._asdict()
-        rp = self.session.put(layer.href, json.dumps(data))
+        rp = self.session.put(layer_url, json.dumps(data))
         check_code(rp)
 
     def get_layer_info(self, layer) -> LayerInfo:
