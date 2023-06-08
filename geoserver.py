@@ -93,8 +93,10 @@ class GeoServer:
     def error(self, *args, **kwargs):
         self._error(*args, **kwargs)
 
-    def list_styles(self) -> List[Style]:
-        r = self.session.get(f"{self.base_url}/styles")
+    def list_styles(self, workspace: Optional[str] = None) -> List[Style]:
+        url = f"{self.base_url}/styles" if workspace is None \
+            else f"{self.base_url}/workspaces/{workspace}/styles"
+        r = self.session.get(url)
         check_code(r)
         return [Style(style["name"], style["href"]) for style in r.json()["styles"]["style"]]
 

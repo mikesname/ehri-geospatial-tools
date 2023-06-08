@@ -34,12 +34,14 @@ def main():
     st.set_page_config(layout="wide")
     st.title("GeoServer Styles")
     col1, col2 = st.columns(2)
+    instance = col1.selectbox("Choose a server instance", options=["Testing", "Production"])
     sidebar = st.sidebar
 
     vocab = Vocabulary()
 
     gs = GeoServer(
-        os.environ["GEOSERVER_HOST"],
+        (os.environ["GEOSERVER_HOST"] if instance == "Production"
+            else os.environ["GEOSERVER_TEST_HOST"]),
         os.environ["GEOSERVER_USER"],
         os.environ["GEOSERVER_PASS"],
         bool(int(os.environ.get("GEOSERVER_SECURE", 0))),
@@ -60,8 +62,7 @@ def main():
                 st.write(f"{term.label} `{term.tag}`")
 
         with col1:
-            st.markdown("### Select a layer:")
-            layer_name = st.selectbox("Layer", [""] + [layer.name for layer in layers])
+            layer_name = st.selectbox("Select a layer", [""] + [layer.name for layer in layers])
 
             # This box has to update when we reload the data
             style_info = st.empty()

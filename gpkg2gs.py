@@ -60,6 +60,8 @@ def main():
         after ingest to avoid a crash when managing the workspace in the GeoServer UI.
         """)
 
+    instance = st.selectbox("Choose a server instance", options=["Testing", "Production"])
+
     uploaded_file = st.file_uploader("Choose a GeoPackage file", type=["gpkg"], accept_multiple_files=False)
     if not uploaded_file:
         st.stop()
@@ -96,13 +98,14 @@ def main():
 
     if st.button(f"Import GeoPackage '{filename}'"):
         gs = GeoServer(
-            os.environ["GEOSERVER_HOST"],
+            (os.environ["GEOSERVER_HOST"] if instance == "Production"
+                else os.environ["GEOSERVER_TEST_HOST"]),
             os.environ["GEOSERVER_USER"],
             os.environ["GEOSERVER_PASS"],
             bool(int(os.environ.get("GEOSERVER_SECURE", 0))),
             os.environ["GEOSERVER_WORKSPACE"],
-            info = st.info,
-            error = st.error
+            info=st.info,
+            error=st.error
         )
 
         for data_type in data_types:
