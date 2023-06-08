@@ -1,4 +1,5 @@
 import os
+import re
 
 import geopandas.io.file
 import slugify
@@ -7,6 +8,8 @@ from geopandas import GeoDataFrame
 
 from geopackage import GPLayerInfo, get_layer_info, GeoPackageError
 from geoserver import GeoServer, LayerInfo
+
+DISALLOWED_CHARS_PATTERN = re.compile(r'[^-a-zA-Z0-9_]+')
 
 
 def preview_layer(filename: str, layer: GPLayerInfo, uploaded_file):
@@ -30,12 +33,12 @@ def preview_layer(filename: str, layer: GPLayerInfo, uploaded_file):
         st.write("---")
 
 
-@st.cache(show_spinner=False)
+@st.cache_data(show_spinner=False)
 def load_dataframe(path: str, *_, **kwargs):
     return geopandas.read_file(path, **kwargs)
 
 
-@st.cache(show_spinner=False)
+@st.cache_data(show_spinner=False)
 def clone_with_lat_lon(gdf: GeoDataFrame) -> GeoDataFrame:
     df = gdf.copy(deep=True)
     df["lon"] = df.geometry.x
@@ -67,7 +70,9 @@ def main():
         st.stop()
 
     # Write the file so we can get metadata from it without depending on Fiona...
-    name = slugify.slugify(os.path.splitext(uploaded_file.name)[0], separator="_", lowercase=False)
+    name = slugify.slugify(os.path.splitext(uploaded_file.name)[0],
+                           lowercase=False,
+                           regex_pattern=DISALLOWED_CHARS_PATTERN)
     filename = f"{name}.gpkg"
     st.write(f"Filename: `{filename}`")
 

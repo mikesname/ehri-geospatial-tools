@@ -8,6 +8,7 @@ import pandas as pd
 import slugify
 import streamlit as st
 from shapely.geometry import Point
+from gpkg2gs import DISALLOWED_CHARS_PATTERN
 
 
 class DataType(Enum):
@@ -62,7 +63,7 @@ uploaded_file = st.file_uploader("Choose a CSV file", type=["csv", "tsv"], accep
 if not uploaded_file:
     st.stop()
 
-name = slugify.slugify(os.path.splitext(uploaded_file.name)[0], separator="_", lowercase=False)
+name = slugify.slugify(os.path.splitext(uploaded_file.name)[0], regex_pattern=DISALLOWED_CHARS_PATTERN, lowercase=False)
 st.write(f"Filename: `{name}`")
 
 # Try and understand the CSV
