@@ -5,6 +5,7 @@ import geopandas.io.file
 import slugify
 import streamlit as st
 from geopandas import GeoDataFrame
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 from geopackage import GPLayerInfo, get_layer_info, GeoPackageError
 from geoserver import GeoServer, LayerInfo
@@ -12,13 +13,13 @@ from geoserver import GeoServer, LayerInfo
 DISALLOWED_CHARS_PATTERN = re.compile(r'[^-a-zA-Z0-9_]+')
 
 
-def preview_layer(filename: str, layer: GPLayerInfo, uploaded_file):
+def preview_layer(filename: str, layer: GPLayerInfo, uploaded_file: UploadedFile):
     if not layer.data_type == "features":
         st.warning(f"No preview available for data type: {layer.data_type}")
         return
 
     with st.spinner(f"Loading data for layer \"{layer.identifier}\"..."):
-        gdf = load_dataframe(filename, uploaded_file.id, layer=layer.table_name)
+        gdf = load_dataframe(filename, uploaded_file.file_id, layer=layer.table_name)
         is_points = check_point_geom(gdf)
         if is_points:
             show = st.radio(f"Preview data for layer \"{layer.identifier}\":", ("Table", "Map"))
