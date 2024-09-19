@@ -1,5 +1,6 @@
 import os
 import re
+import tempfile
 
 import geopandas.io.file
 import slugify
@@ -70,67 +71,72 @@ def main():
     if not uploaded_file:
         st.stop()
 
+    st.session_state["uploaded_file"] = uploaded_file
+
     # Write the file so we can get metadata from it without depending on Fiona...
     name = slugify.slugify(os.path.splitext(uploaded_file.name)[0],
                            lowercase=False,
                            regex_pattern=DISALLOWED_CHARS_PATTERN)
-    filename = f"{name}.gpkg"
-    st.write(f"Filename: `{filename}`")
 
-    with open(filename, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-        uploaded_file.seek(0)
+    with tempfile.TemporaryDirectory() as tempdir:
+        filename = os.path.join(tempdir, f"{name}.gpkg")
+        st.write(f"Filename: `{name}`")
 
-    layers = []
-    try:
-        layers = get_layer_info(filename)
-        if not layers:
-            st.error("No layers found, exiting...")
-            st.stop()
-    except GeoPackageError as e:
-        st.error(e)
-        st.stop()
-
-    st.info(f"Layers found: {', '.join([layer.identifier for layer in layers])}")
-    data_types = set([layer.data_type for layer in layers])
-
-    if "features" not in data_types:
-        st.warning("No feature layers found, preview will not be available")
-
-    layer = layers[0]
-    if len(layers) > 1:
-        layer = st.selectbox("Preview layer:", layers)
-    preview_layer(filename, layer, uploaded_file)
-
-    if st.button(f"Import GeoPackage '{filename}'"):
-        gs = GeoServer(
-            (os.environ["GEOSERVER_HOST"] if instance == "Production"
-                else os.environ["GEOSERVER_TEST_HOST"]),
-            os.environ["GEOSERVER_USER"],
-            os.environ["GEOSERVER_PASS"],
-            bool(int(os.environ.get("GEOSERVER_SECURE", 0))),
-            os.environ["GEOSERVER_WORKSPACE"],
-            info=st.info,
-            error=st.error
-        )
-
-        for data_type in data_types:
-            st.info(f"Uploading store for data type: {data_type}")
-            gs.ingest_store(name, data_type, uploaded_file)
+        with open(filename, "wb") as f:
+            f.write(uploaded_file.getbuffer())
             uploaded_file.seek(0)
 
-        st.balloons()
-        st.success("Done!")
+        layers = []
+        try:
+            layers = get_layer_info(filename)
+            if not layers:
+                st.error("No layers found, exiting...")
+                st.stop()
+        except GeoPackageError as e:
+            st.error(e)
+            st.stop()
 
-        for layer_info in layers:
-            if layer_info.data_type in ["features", "tiles"]:
-                with st.spinner("Loading GeoServer layer preview..."):
-                    wms_url = gs.get_layer_image(LayerInfo(layer_info.table_name, layer_info.bounds, layer_info.srs))
-                    st.write("---")
-                    with st.container():
-                        st.markdown(f"WMS layer preview: '{layer_info.identifier}' ([link]({wms_url}))")
-                        st.image(wms_url)
+        st.info(f"Layers found: {', '.join([layer.identifier for layer in layers])}")
+        data_types = set([layer.data_type for layer in layers])
 
+        if "features" not in data_types:
+            st.warning("No feature layers found, preview will not be available")
+
+        layer = layers[0]
+        if len(layers) > 1:
+            layer = st.selectbox("Preview layer:", layers)
+        preview_layer(filename, layer, uploaded_file)
+
+    if st.button(f"Import GeoPackage '{name}'"):
+            uploaded_file = st.session_state["uploaded_file"]
+
+            gs = GeoServer(
+                (os.environ["GEOSERVER_HOST"] if instance == "Production"
+                    else os.environ["GEOSERVER_TEST_HOST"]),
+                os.environ["GEOSERVER_USER"],
+                os.environ["GEOSERVER_PASS"],
+                bool(int(os.environ.get("GEOSERVER_SECURE", 0))),
+                os.environ["GEOSERVER_WORKSPACE"],
+                info=st.info,
+                error=st.error
+            )
+
+            for data_type in data_types:
+                st.info(f"Uploading store for data type: {data_type}")
+                gs.ingest_store(name, data_type, uploaded_file)
+                uploaded_file.seek(0)
+
+            st.balloons()
+            st.success("Done!")
+
+            for layer_info in layers:
+                if layer_info.data_type in ["features", "tiles"]:
+                    with st.spinner("Loading GeoServer layer preview..."):
+                        wms_url = gs.get_layer_image(LayerInfo(layer_info.table_name, layer_info.bounds, layer_info.srs))
+                        st.write("---")
+                        with st.container():
+                            st.markdown(f"WMS layer preview: '{layer_info.identifier}' ([link]({wms_url}))")
+                            st.image(wms_url)
 
 if __name__ == "__main__":
     main()
