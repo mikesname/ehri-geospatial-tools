@@ -22,7 +22,7 @@ class DataType(Enum):
     LONGITUDE = 7
 
 
-def coerce_value(value: str, dtype: DataType):
+def coerce_value(key: str, value: str, dtype: DataType):
     """Convert a string into the correct data type"""
     if dtype == DataType.TEXT:
         return value
@@ -40,118 +40,124 @@ def coerce_value(value: str, dtype: DataType):
         raise Exception(f"Unknown data type for col '{key}': {dtype}...")
 
 
-st.write("""# CSV to GeoPackage converter""")
+def main():
+    st.write("""# CSV to GeoPackage converter""")
 
-with st.sidebar:
-    st.write("""
-    This script allows you to convert a CSV/TSV file containing geospatial point data
-    (i.e. points on a map and their attributes) to the GeoPackage format.
+    with st.sidebar:
+        st.write("""
+        This script allows you to convert a CSV/TSV file containing geospatial point data
+        (i.e. points on a map and their attributes) to the GeoPackage format.
 
-    The CSV *must* contain exactly one column assigned to a longitude value and 
-    one column assigned to a latitude value. Points are assumed to represent
-    WSG84 coordinates.
-    
-    The CSV *must* contain a header row which will be used to derive the GeoPackage
-    database column names.
-    
-    Date and datetime column values must be in '%Y-%m-%d' and '%Y-%m-%d %H-%M-%S' format
-    respectively.
-    """)
+        The CSV *must* contain exactly one column assigned to a longitude value and 
+        one column assigned to a latitude value. Points are assumed to represent
+        WSG84 coordinates.
 
-uploaded_file = st.file_uploader("Choose a CSV file", type=["csv", "tsv"], accept_multiple_files=False)
+        The CSV *must* contain a header row which will be used to derive the GeoPackage
+        database column names.
 
-if not uploaded_file:
-    st.stop()
+        Date and datetime column values must be in '%Y-%m-%d' and '%Y-%m-%d %H-%M-%S' format
+        respectively.
+        """)
 
-name = slugify.slugify(os.path.splitext(uploaded_file.name)[0], regex_pattern=DISALLOWED_CHARS_PATTERN, lowercase=False)
-st.write(f"Filename: `{name}`")
+    uploaded_file = st.file_uploader("Choose a CSV file", type=["csv", "tsv"], accept_multiple_files=False)
 
-# Try and understand the CSV
-stringio = StringIO(uploaded_file.getvalue().decode("utf-8"))
-dialect = csv.Sniffer().sniff(stringio.read(1024))
-if dialect is None:
-    st.error("Cannot discern dialect of CSV file. Is this a standard format?")
-    st.stop()
+    if not uploaded_file:
+        st.stop()
 
-stringio.seek(0)
-reader = csv.DictReader(stringio, dialect=dialect)
+    name = slugify.slugify(os.path.splitext(uploaded_file.name)[0], regex_pattern=DISALLOWED_CHARS_PATTERN, lowercase=False)
+    st.write(f"Filename: `{name}`")
 
-st.write("### Assign column types:")
+    # Try and understand the CSV
+    stringio = StringIO(uploaded_file.getvalue().decode("utf-8"))
+    dialect = csv.Sniffer().sniff(stringio.read(1024))
+    if dialect is None:
+        st.error("Cannot discern dialect of CSV file. Is this a standard format?")
+        st.stop()
 
-headers = reader.fieldnames
-init_types = dict((header, DataType.TEXT) for header in headers)
+    stringio.seek(0)
+    reader = csv.DictReader(stringio, dialect=dialect)
 
-for col_idx, header in enumerate(headers):
-    values = [t.name for t in list(DataType)]
-    selected = DataType.TEXT.value  # default
-    if header.lower().startswith("lat") or header.lower() == "y":
-        init_types[header] = DataType.LATITUDE
-        selected = DataType.LATITUDE.value
-    elif header.lower().startswith("lon") or header.lower() == "x":
-        init_types[header] = DataType.LONGITUDE
-        selected = DataType.LONGITUDE.value
+    st.write("### Assign column types:")
 
-    init_types[header] = DataType[st.selectbox(header, values, index=selected,
-                                               key=f"type-col-{col_idx + 1}")]
+    headers = reader.fieldnames
+    init_types = dict((header, DataType.TEXT) for header in headers)
 
-lat_cols = [h for h, t in init_types.items() if t == DataType.LATITUDE]
-lon_cols = [h for h, t in init_types.items() if t == DataType.LONGITUDE]
+    for col_idx, header in enumerate(headers):
+        values = [t.name for t in list(DataType)]
+        selected = DataType.TEXT.value  # default
+        if header.lower().startswith("lat") or header.lower() == "y":
+            init_types[header] = DataType.LATITUDE
+            selected = DataType.LATITUDE.value
+        elif header.lower().startswith("lon") or header.lower() == "x":
+            init_types[header] = DataType.LONGITUDE
+            selected = DataType.LONGITUDE.value
 
-if not (lat_cols and lon_cols):
-    st.error("No latitude and/or longitude column found")
-    st.stop()
+        init_types[header] = DataType[st.selectbox(header, values, index=selected,
+                                                   key=f"type-col-{col_idx + 1}")]
 
-if len(lat_cols) > 1:
-    st.error("Too many latitude columns assigned")
-    st.stop()
+    lat_cols = [h for h, t in init_types.items() if t == DataType.LATITUDE]
+    lon_cols = [h for h, t in init_types.items() if t == DataType.LONGITUDE]
 
-if len(lon_cols) > 1:
-    st.error("Too many longitude columns assigned")
-    st.stop()
+    if not (lat_cols and lon_cols):
+        st.error("No latitude and/or longitude column found")
+        st.stop()
 
-lat_col = lat_cols[0]
-lon_col = lon_cols[0]
-st.write(f"Latitude column: **{lat_col}**, Longitude column: **{lon_col}**")
+    if len(lat_cols) > 1:
+        st.error("Too many latitude columns assigned")
+        st.stop()
 
-if st.button("Generate GeoPackage?"):
-    data = {"geometry": []}
-    for header in headers:
-        if header not in [lat_col, lon_col]:
-            data[header] = []
+    if len(lon_cols) > 1:
+        st.error("Too many longitude columns assigned")
+        st.stop()
 
-    # Put the actual data in the dataframe
-    # FIXME: would GeoPandas's own CSV functionality do this better?
-    skipped = 0
-    for row_num, row in enumerate(reader):
-        if not (row[lon_col] and row[lat_col]):
-            skipped += 1
-            continue
+    lat_col = lat_cols[0]
+    lon_col = lon_cols[0]
+    st.write(f"Latitude column: **{lat_col}**, Longitude column: **{lon_col}**")
 
-        # Geometry column
-        data["geometry"].append(Point(float(row[lon_col]), float(row[lat_col])))
 
-        # Other columns
-        for key, value in row.items():
-            if key in [lat_col, lon_col]:
+
+    if st.button("Generate GeoPackage?"):
+        data = {"geometry": []}
+        for header in headers:
+            if header not in [lat_col, lon_col]:
+                data[header] = []
+
+        # Put the actual data in the dataframe
+        # FIXME: would GeoPandas's own CSV functionality do this better?
+        skipped = 0
+        for row_num, row in enumerate(reader):
+            if not (row[lon_col] and row[lat_col]):
+                skipped += 1
                 continue
-            col_type = init_types[key]
-            try:
-                data[key].append(coerce_value(value, col_type))
-            except ValueError as e:
-                print(e)
-                st.error(
-                    f"Error converting column '{key} value '{value}' to type {col_type.name} at line {row_num + 1}")
-                st.stop()
 
-    if skipped:
-        st.warning(f"Skipped {skipped} row(s) without latitude/longitude data")
+            # Geometry column
+            data["geometry"].append(Point(float(row[lon_col]), float(row[lat_col])))
 
-    # Write a dataframe!
-    gdf = geopandas.GeoDataFrame(data, crs="EPSG:4326")
-    st.write(gdf)
-    st.write("---")
+            # Other columns
+            for key, value in row.items():
+                if key in [lat_col, lon_col]:
+                    continue
+                col_type = init_types[key]
+                try:
+                    data[key].append(coerce_value(key, value, col_type))
+                except ValueError as e:
+                    print(e)
+                    st.error(
+                        f"Error converting column '{key} value '{value}' to type {col_type.name} at line {row_num + 1}")
+                    st.stop()
 
-    out_name = f"{name}.gpkg"
-    gdf.to_file(out_name, layer=name, driver="GPKG")
-    with open(out_name, "rb") as f:
-        st.download_button(f"Download File: '{out_name}'", f, file_name=out_name, mime="application/x-sqlite3")
+        if skipped:
+            st.warning(f"Skipped {skipped} row(s) without latitude/longitude data")
+
+        # Write a dataframe!
+        gdf = geopandas.GeoDataFrame(data, crs="EPSG:4326")
+        st.write(gdf)
+        st.write("---")
+
+        out_name = f"{name}.gpkg"
+        gdf.to_file(out_name, layer=name, driver="GPKG")
+        with open(out_name, "rb") as f:
+            st.download_button(f"Download File: '{out_name}'", f, file_name=out_name, mime="application/x-sqlite3")
+
+if __name__ == "__main__":
+    main()

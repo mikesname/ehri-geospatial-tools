@@ -31,7 +31,7 @@ class Vocabulary:
 
 def main():
 
-    st.set_page_config(layout="wide")
+    # st.set_page_config(layout="wide")
     st.title("GeoServer Styles")
     col1, col2 = st.columns(2)
     instance = col1.selectbox("Choose a server instance", options=["Testing", "Production"])

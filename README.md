@@ -21,3 +21,16 @@ sldls
 Allows previewing layers with different styles (optionally aligned with the
 EHRI Holocaust Geographies controlled vocabular of types) and setting layer
 default styles.
+
+Configuration
+-------------
+
+The following environment variables need to be set for development, or in
+the Streamlit secrets:
+
+- `GEOSERVER_HOST`: The URL of the GeoServer instance
+- `GEOSERVER_TEST_HOST`: The URL of the GeoServer test instance
+- `GEOSERVER_USER`: The GeoServer user
+- `GEOSERVER_PASS`: The GeoServer password
+- `GEOSERVER_WORKSPACE`: The GeoServer workspace
+- `GEOSERVER_SECURE`: Whether to use HTTPS for the GeoServer connection

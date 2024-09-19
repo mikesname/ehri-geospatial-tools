@@ -40,8 +40,8 @@ def load_dataframe(path: str, *_, **kwargs):
 
 
 @st.cache_data(show_spinner=False)
-def clone_with_lat_lon(gdf: GeoDataFrame) -> GeoDataFrame:
-    df = gdf.copy(deep=True)
+def clone_with_lat_lon(_gdf: GeoDataFrame) -> GeoDataFrame:
+    df = _gdf.copy(deep=True)
     df["lon"] = df.geometry.x
     df["lat"] = df.geometry.y
     return df
