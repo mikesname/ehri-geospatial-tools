@@ -11,7 +11,7 @@ MAX_LINES = 500
 
 
 def main():
-    st.write("""# GeoServer GeoPackage importer""")
+    st.write("""# GeoPackage Text Exporter""")
 
     with st.sidebar:
         st.write("""
