@@ -88,7 +88,12 @@ def check_invalid_geometry(filepath: str, table_name: str) -> int:
         geom_col = cursor.fetchone()[0]
 
         cursor = conn.cursor()
-        cursor.execute(f"SELECT count({geom_col}) FROM \"{table_name}\" WHERE ST_IsValid({geom_col}) = 0")
+        # For some reason ST_IsValid() doesn't work on Ubuntu 24.04, so we have to
+        # use a backup method to detect POINT(nan nan) instead
+        cursor.execute(f"""SELECT count({geom_col}) 
+                            FROM \"{table_name}\" 
+                            WHERE ST_IsValid({geom_col}) = 0 
+                                OR ST_AsText({geom_col}) = 'POINT(nan nan)';""")
         invalid = cursor.fetchone()[0]
 
         return invalid
