@@ -8,10 +8,10 @@ import streamlit as st
 from geopandas import GeoDataFrame
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 
-from gpkg_utils import GPLayerInfo, get_layer_info, GeoPackageError
+from gpkg_utils import GPLayerInfo, get_layer_info, GeoPackageError, check_invalid_geometry
 from geoserver import GeoServer, LayerInfo
 
-DISALLOWED_CHARS_PATTERN = re.compile(r'[^-a-zA-Z0-9_]+')
+DISALLOWED_CHARS_PATTERN = r'[^-a-zA-Z0-9_]+'
 
 
 def preview_layer(filename: str, layer: GPLayerInfo, uploaded_file: UploadedFile):
@@ -86,7 +86,6 @@ def main():
             f.write(uploaded_file.getbuffer())
             uploaded_file.seek(0)
 
-        layers = []
         try:
             layers = get_layer_info(filename)
             if not layers:
@@ -101,6 +100,11 @@ def main():
 
         if "features" not in data_types:
             st.warning("No feature layers found, preview will not be available")
+
+        for layer in layers:
+            invalid = check_invalid_geometry(filename, layer.table_name)
+            if invalid:
+                st.error(f"Layer '{layer.identifier}' contains {invalid} invalid {"geometry" if (invalid == 1) else "geometries"}")
 
         layer = layers[0]
         if len(layers) > 1:
@@ -137,6 +141,7 @@ def main():
                         with st.container():
                             st.markdown(f"WMS layer preview: '{layer_info.identifier}' ([link]({wms_url}))")
                             st.image(wms_url)
+
 
 if __name__ == "__main__":
     main()
