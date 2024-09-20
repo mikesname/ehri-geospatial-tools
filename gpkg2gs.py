@@ -8,9 +8,11 @@ import streamlit as st
 from geopandas import GeoDataFrame
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 
-from gpkg_utils import GPLayerInfo, get_layer_info, GeoPackageError, check_invalid_geometry
+from gpkg_utils import GPLayerInfo, get_layer_info, GeoPackageError, check_invalid_geometry, get_column_info
 from geoserver import GeoServer, LayerInfo
 
+
+VALID_COL_NAME = r"^[a-zA-Z_][a-zA-Z0-9_-]*$"
 DISALLOWED_CHARS_PATTERN = r'[^-a-zA-Z0-9_]+'
 
 
@@ -108,6 +110,13 @@ def main():
             invalid = check_invalid_geometry(filename, layer.table_name)
             if invalid:
                 st.error(f"Layer '{layer.identifier}' contains {invalid} invalid {"geometry" if (invalid == 1) else "geometries"}")
+
+        # Check the column names are valid for GeoServer export
+        for layer in layers:
+            col_names = get_column_info(filename, layer.table_name)
+            for col in col_names:
+                if not re.match(VALID_COL_NAME, col):
+                    st.error(f"Column '{col}' in layer '{layer.identifier}' is not a valid GeoServer column name")
 
         layer = layers[0]
         if len(layers) > 1:

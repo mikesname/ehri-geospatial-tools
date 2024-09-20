@@ -67,7 +67,7 @@ def get_column_info(filepath: str, table_name: str) -> List[str]:
     columns = []
     try:
         cursor = conn.cursor()
-        for col in cursor.execute(f"PRAGMA table_info({table_name})"):
+        for col in cursor.execute(f"PRAGMA table_info('{table_name}')"):
             columns.append(col[1])
     except sqlite3.DatabaseError as e:
         raise GeoPackageError(f"Error reading GeoPackage '{filepath}' (is it the right format?) {e}")
