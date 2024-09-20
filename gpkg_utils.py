@@ -1,5 +1,7 @@
 """GeoPackage-related functions"""
+import argparse
 import csv
+import os
 import sqlite3
 
 import spatialite
@@ -88,6 +90,7 @@ def check_invalid_geometry(filepath: str, table_name: str) -> int:
         cursor = conn.cursor()
         cursor.execute(f"SELECT count({geom_col}) FROM \"{table_name}\" WHERE ST_IsValid({geom_col}) = 0")
         invalid = cursor.fetchone()[0]
+
         return invalid
     except sqlite3.DatabaseError as e:
         raise GeoPackageError(f"Error reading GeoPackage '{filepath}' (is it the right format?) {e}")
@@ -171,3 +174,15 @@ def csv_to_gdf(
     return gdf, skipped
 
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Check a GeoPackage for invalid geometries")
+    parser.add_argument("gpkg", help="Path to GeoPackage file")
+    args = parser.parse_args()
+
+    basename = os.path.basename(args.gpkg)
+    if not basename.endswith(".gpkg"):
+        raise ValueError("Invalid file extension, must be .gpkg")
+    table_name = os.path.splitext(basename)[0]
+
+    bad = check_invalid_geometry(args.gpkg, table_name)
+    print(f"Found {bad} invalid geometries in {table_name}")
