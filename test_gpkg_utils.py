@@ -1,7 +1,7 @@
 
 import csv
 
-from gpkg_utils import DataType, csv_to_gdf
+from gpkg_utils import DataType, csv_to_gdf, check_invalid_geometry
 
 
 def test_geom_col_csv_to_gpkg():
@@ -51,5 +51,7 @@ def test_date_col_csv_to_gpkg():
         assert gdf.shape[0] == 7 # 7 rows
 
 
-
+def test_check_invalid_geometry():
+    bad = check_invalid_geometry('test/invalid_geom.gpkg','invalid_geom')
+    assert bad == 2
 

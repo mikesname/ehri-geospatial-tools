@@ -1,6 +1,8 @@
 """GeoPackage-related functions"""
 import csv
 import sqlite3
+
+import spatialite
 from enum import Enum
 from typing import NamedTuple, List, Tuple, Dict
 
@@ -55,6 +57,42 @@ def coerce_value(key: str, value: str, dtype: DataType):
         return pd.to_datetime(value, format="%Y-%m-%d %H:%M:%S")
     else:
         raise Exception(f"Unknown data type for col '{key}': {dtype}...")
+
+
+def get_column_info(filepath: str, table_name: str) -> List[str]:
+    """Get the names of the columns in a GeoPackage table"""
+    conn = sqlite3.connect(filepath)
+    columns = []
+    try:
+        cursor = conn.cursor()
+        for col in cursor.execute(f"PRAGMA table_info({table_name})"):
+            columns.append(col[1])
+    except sqlite3.DatabaseError as e:
+        raise GeoPackageError(f"Error reading GeoPackage '{filepath}' (is it the right format?) {e}")
+    finally:
+        conn.close()
+    return columns
+
+
+def check_invalid_geometry(filepath: str, table_name: str) -> int:
+    """Check if a GeoPackage table contains points which are considered
+    invalid, e.g. Point(NaN NaN)"""
+    conn = spatialite.connect(filepath)
+    try:
+        conn.execute("SELECT EnableGpkgMode();")
+        # first, find the geometry column name for this table by inspecting the gpkg_geometry_columns table...
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT column_name FROM gpkg_geometry_columns WHERE table_name = ?", (table_name,))
+        geom_col = cursor.fetchone()[0]
+
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT count({geom_col}) FROM \"{table_name}\" WHERE ST_IsValid({geom_col}) = 0")
+        invalid = cursor.fetchone()[0]
+        return invalid
+    except sqlite3.DatabaseError as e:
+        raise GeoPackageError(f"Error reading GeoPackage '{filepath}' (is it the right format?) {e}")
+    finally:
+        conn.close()
 
 
 def get_layer_info(filepath: str) -> List[GPLayerInfo]:
