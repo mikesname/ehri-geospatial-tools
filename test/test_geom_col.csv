@@ -1,0 +1,8 @@
+geom,col1,col2
+Point(0.0 0.0),red,blue
+Point(1.0 1.0),green,red
+Point(2.0 2.0),blue,green
+Point(3.0 3.0),red,blue
+Point(4.0 4.0),green,red
+Point(5.0 5.0),blue,green
+Point(6.0 6.0),red,blue

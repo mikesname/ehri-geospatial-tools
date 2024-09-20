@@ -8,7 +8,7 @@ import streamlit as st
 from geopandas import GeoDataFrame
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 
-from geopackage import GPLayerInfo, get_layer_info, GeoPackageError
+from gpkg_utils import GPLayerInfo, get_layer_info, GeoPackageError
 from geoserver import GeoServer, LayerInfo
 
 DISALLOWED_CHARS_PATTERN = re.compile(r'[^-a-zA-Z0-9_]+')

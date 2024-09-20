@@ -3,7 +3,7 @@
 import argparse
 import sys
 
-from geopackage import get_layer_info, GeoPackageError
+from gpkg_utils import get_layer_info, GeoPackageError
 from geoserver import GeoServer, GeoServerError, LayerInfo
 
 if __name__ == "__main__":
