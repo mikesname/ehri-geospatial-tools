@@ -45,6 +45,9 @@ def clone_with_lat_lon(_gdf: GeoDataFrame) -> GeoDataFrame:
     df = _gdf.copy(deep=True)
     df["lon"] = df.geometry.x
     df["lat"] = df.geometry.y
+
+    # drop empty lat/lon columns
+    df.dropna(subset=["lat", "lon"], inplace=True)
     return df
 
 
