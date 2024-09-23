@@ -24,6 +24,7 @@ class GPLayerInfo(NamedTuple):
     data_type: str
     identifier: str
     description: str
+    geom_col: str | None
     bounds: Tuple[float, float, float, float]
     srs: str
 
@@ -108,12 +109,13 @@ def get_layer_info(filepath: str) -> List[GPLayerInfo]:
     layers = []
     try:
         cursor = conn.cursor()
-        for tn, dt, ident, desc, min_x, min_y, max_x, max_y, srs_id, auth in cursor.execute(
+        for tn, dt, ident, desc, geom_col, min_x, min_y, max_x, max_y, srs_id, auth in cursor.execute(
                 """SELECT
                     c.table_name,
                     c.data_type,
                     c.identifier,
                     c.description,
+                    g.column_name,
                     c.min_x,
                     c.min_y,
                     c.max_x,
@@ -122,8 +124,11 @@ def get_layer_info(filepath: str) -> List[GPLayerInfo]:
                     s.organization
                     FROM gpkg_contents c
                     JOIN gpkg_spatial_ref_sys s
-                    ON c.srs_id = s.srs_id"""):
-            layers.append(GPLayerInfo(tn, dt, ident, desc, (min_x, min_y, max_x, max_y), f"{auth}:{srs_id}"))
+                    ON c.srs_id = s.srs_id
+                    LEFT JOIN gpkg_geometry_columns g
+                    ON c.table_name = g.table_name;
+                    """):
+            layers.append(GPLayerInfo(tn, dt, ident, desc, geom_col, (min_x, min_y, max_x, max_y), f"{auth}:{srs_id}"))
     except sqlite3.DatabaseError as e:
         raise GeoPackageError(f"Error reading GeoPackage '{filepath}' (is it the right format?) {e}")
     finally:

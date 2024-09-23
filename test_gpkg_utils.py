@@ -54,3 +54,15 @@ def test_date_col_csv_to_gpkg():
 def test_check_invalid_geometry():
     bad = check_invalid_geometry('test/invalid_geom.gpkg','invalid_geom')
     assert bad == 2
+
+
+def test_get_layer_info():
+    from gpkg_utils import get_layer_info
+    layers = get_layer_info('test/invalid_geom.gpkg')
+    assert len(layers) == 1
+    assert layers[0].table_name == 'invalid_geom'
+    assert layers[0].data_type == 'features'
+    assert layers[0].identifier == 'invalid_geom'
+    assert layers[0].description == ''
+    assert layers[0].geom_col == 'geom'
+    assert layers[0].srs == 'EPSG:4326'
