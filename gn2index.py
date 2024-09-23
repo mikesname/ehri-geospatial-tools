@@ -55,7 +55,7 @@ def main():
     if st.button("Reindex all datasets"):
         def stream_data():
             for record_id, wfs_name in todo:
-                st.write(gn.submit_reindex_task(xsrf_token, record_id, wfs_name))
+                gn.submit_reindex_task(xsrf_token, record_id, wfs_name)
                 yield f"Reindexing {record_id} -> ({wfs_name})...\n"
 
         st.write_stream(stream_data)
