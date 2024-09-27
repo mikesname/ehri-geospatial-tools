@@ -1,3 +1,4 @@
+import csv
 import os
 import tempfile
 
@@ -8,6 +9,26 @@ import streamlit as st
 import gpkg2gs
 
 MAX_LINES = 500
+
+
+def check_invalid_characters(text):
+    # Define ranges of valid characters
+    valid_ranges = [
+        (0x9, 0xA),       # Tab, Newline
+        (0xD, 0xD),       # Carriage Return
+        (0x20, 0xD7FF),   # Basic Multilingual Plane without surrogates
+        (0xE000, 0xFFFD), # Private Use Area
+        (0x10000, 0x10FFFF) # Supplementary Planes
+    ]
+
+    invalid_chars = []
+    if text is not None:
+        for i, char in enumerate(text):
+            code_point = ord(char)
+            if not any(start <= code_point <= end for start, end in valid_ranges):
+                invalid_chars.append((i, char, code_point))
+
+    return invalid_chars
 
 
 def main():
@@ -49,7 +70,7 @@ def main():
         st.write("### Select text columns to extract:")
 
         for i, col in enumerate(extract.keys()):
-            extract[col] = st.checkbox(col, value=True, key=f"type-col-{i + 1}")
+            extract[col] = st.checkbox(col, value=False, key=f"type-col-{i + 1}")
 
         num_rows = gdf.shape[0]
         max_lines = num_rows
@@ -64,7 +85,21 @@ def main():
         # get a new dataframe consisting of only the selected columns
         # and the first 500 lines
         new_gdf = gdf[list(extract_cols)].head(max_lines)
-        st.code(new_gdf.to_csv(header=False, sep='\t', index=False))
+
+        # for column in new_gdf.select_dtypes(include=['object', 'string']):
+        #     invalid_chars = new_gdf[column].apply(check_invalid_characters)
+        #     for idx, chars in invalid_chars[invalid_chars.apply(bool)].items():
+        #         # print(f"Row {idx}:")
+        #         for pos, char, code_point in chars:
+        #             st.error(f"  Position {pos}: Character '{char}' (U+{code_point:04X}, Decimal {code_point})")
+
+        txt = new_gdf.to_csv(header=False, sep='\t', quoting=csv.QUOTE_NONE, index=False)
+        txt_size = len(txt.encode('utf-8')) / 1024
+        if txt_size < 32:
+            st.info("Text size: {:.1f}kB".format(txt_size))
+        else:
+            st.error("Text size exceeds 32kB limit")
+        st.code(txt, language='text')
 
 
 if __name__ == "__main__":
